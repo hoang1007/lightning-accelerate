@@ -1,3 +1,5 @@
+[![codecov](https://codecov.io/gh/hoang1007/lightning-accelerate/graph/badge.svg?token=3Z1wNUpDbL)](https://codecov.io/gh/hoang1007/lightning-accelerate)
+
 **Lightning Accelerate** aim to provide a simple and easy-to-use framework for training deep learning model on GPU, TPU, etc... with 🤗 [Huggingface's Accelerate](https://github.com/huggingface/accelerate) and⚡️[Pytorch Lightning](https://github.com/Lightning-AI/lightning)'s style.
 
 ## Table of Contents
