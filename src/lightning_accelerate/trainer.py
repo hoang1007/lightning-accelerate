@@ -5,12 +5,10 @@ import math
 
 import torch
 import accelerate
-import diffusers
 
 from torch.utils.data import DataLoader, Dataset
 from torch.nn import Parameter
 from accelerate.logging import get_logger
-from diffusers.optimization import get_scheduler
 
 from accelerate import DistributedDataParallelKwargs
 
@@ -20,6 +18,7 @@ from lightning_accelerate.utils.trainer_utils import (
     prune_checkpoints,
     is_using_gpu,
 )
+from lightning_accelerate.scheduler import get_scheduler
 from lightning_accelerate.ddp_wrapper import unwrap_model, DDPWrapper
 from lightning_accelerate.hooks import HookHandler
 from lightning_accelerate.utils.progess_bar import TQDMProgessBar
@@ -61,11 +60,6 @@ class Trainer:
             project_config=training_args.get_project_configuration(),
             kwargs_handlers=[ddp_kwargs],
         )
-
-        if self.accelerator.is_local_main_process:
-            diffusers.utils.logging.set_verbosity_info()
-        else:
-            diffusers.utils.logging.set_verbosity_error()
 
         self.training_module = self._setup_training_module(training_module)
 

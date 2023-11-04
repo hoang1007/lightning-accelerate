@@ -1,5 +1,16 @@
 **Lightning Accelerate** aim to provide a simple and easy-to-use framework for training deep learning model on GPU, TPU, etc... with 🤗 [Huggingface's Accelerate](https://github.com/huggingface/accelerate) and⚡️[Pytorch Lightning](https://github.com/Lightning-AI/lightning)'s style.
 
+## Table of Contents
+- [Table of Contents](#table-of-contents)
+- [Installation](#installation)
+- [Features](#features)
+- [Usage](#usage)
+  - [Training](#training)
+  - [Training with advanced features](#training-with-advanced-features)
+  - [Evaluation](#evaluation)
+- [Contributing](#contributing)
+- [Acknowledgement](#acknowledgement)
+
 ## Installation
 To install **Lightning Accelerate**, run this command:
 ```bash
