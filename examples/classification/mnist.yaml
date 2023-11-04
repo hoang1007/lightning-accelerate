@@ -1,0 +1,21 @@
+training_args:
+  train_batch_size: 8
+  num_epochs: 1
+  save_total_limit: 1
+  learning_rate: 0.0001
+  eval_steps: 1000
+  tracker: wandb
+
+  tracker_init_kwargs:
+    name: 'mnist-classification'
+
+# You can also declare like the following to specify the training module and data module
+# Because MnistTrainingModule and MnistDataModule are not decalred inside the package
+# so we can't use the following to specify the training module and data module.
+# training_module:
+#   _target_: mnist.MnistTrainingModule
+#   ...model_args
+
+# data_module:
+#   _target_: mnist.MnistDataModule
+#   ...data_args

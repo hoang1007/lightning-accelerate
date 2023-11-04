@@ -1,0 +1,2 @@
+omegaconf>=2.3.0
+accelerate>=0.23.0
