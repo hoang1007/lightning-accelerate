@@ -46,6 +46,11 @@ def init_from_config(config: Dict[str, Any], reload: bool = False):
     return getattr(module, cls)(**cfg)
 
 
+def _init_config(cls):
+    cls_name = ".".join([cls.__class__.__module__, cls.__class__.__qualname__])
+    return OmegaConf.create(dict(_target_=cls_name))
+
+
 class ConfigMixin:
     def __init_subclass__(cls):
         super().__init_subclass__()
@@ -66,8 +71,7 @@ class ConfigMixin:
             default_args.update(kwargs)
 
             if not hasattr(self, "_default_args"):
-                cls_name = ".".join([self.__class__.__module__, self.__class__.__qualname__])
-                self._default_args = OmegaConf.create(dict(_target_=cls_name))
+                self._default_args = _init_config(self)
             self._default_args.update(default_args)
 
             return func(self, *args, **kwargs)
@@ -76,9 +80,14 @@ class ConfigMixin:
 
     @property
     def config(self):
-        return self._default_args.copy()
-    
+        if hasattr(self, "_default_args"):
+            return self._default_args.copy()
+        else:
+            return _init_config(self)
+
     def register_to_config(self, **kwargs):
+        if not hasattr(self, "_default_args"):
+            self._default_args = _init_config(self)
         self._default_args.update(kwargs)
 
     @classmethod
