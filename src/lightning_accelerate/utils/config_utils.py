@@ -65,18 +65,24 @@ class ConfigMixin:
                 default_args[key] = override_val
             default_args.update(kwargs)
 
-            self.__default_args = default_args
+            self._default_args = OmegaConf.create(default_args)
             return func(self, *args, **kwargs)
 
         return wrapper
 
     @property
-    def config(self) -> dict:
+    def config(self):
         cls_name = ".".join([self.__class__.__module__, self.__class__.__qualname__])
-        if not hasattr(self, "__default_args"):
-            return dict(_target_=cls_name)
+        cfg = OmegaConf.create(dict(_target_=cls_name))
+        if hasattr(self, "_default_args"):
+            cfg.update(self._default_args.copy())
+        return cfg
+    
+    def register_to_config(self, **kwargs):
+        if hasattr(self, "_default_args"):
+            self._default_args.update(kwargs.copy())
         else:
-            return dict(_target_=cls_name, **self.__default_args.copy())
+            self._default_args = OmegaConf.create(kwargs.copy())
 
     @classmethod
     def from_config(cls, config: dict):
