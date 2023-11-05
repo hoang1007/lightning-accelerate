@@ -25,11 +25,11 @@ def parse_config_from_cli():
         base_config = OmegaConf.load(config.config)
         config = OmegaConf.merge(base_config, config)
 
-    config_name = os.path.splitext(os.path.basename(config.config))[0]
+    # config_name = os.path.splitext(os.path.basename(config.config))[0]
     config = OmegaConf.to_container(config, resolve=True)
 
-    if config.get("experiment_name") is None:
-        config["experiment_name"] = config_name
+    # if config.get("experiment_name") is None:
+    #     config["experiment_name"] = config_name
     return config
 
 
@@ -65,24 +65,21 @@ class ConfigMixin:
                 default_args[key] = override_val
             default_args.update(kwargs)
 
-            self._default_args = OmegaConf.create(default_args)
+            if not hasattr(self, "_default_args"):
+                cls_name = ".".join([self.__class__.__module__, self.__class__.__qualname__])
+                self._default_args = OmegaConf.create(dict(_target_=cls_name))
+            self._default_args.update(default_args)
+
             return func(self, *args, **kwargs)
 
         return wrapper
 
     @property
     def config(self):
-        cls_name = ".".join([self.__class__.__module__, self.__class__.__qualname__])
-        cfg = OmegaConf.create(dict(_target_=cls_name))
-        if hasattr(self, "_default_args"):
-            cfg.update(self._default_args.copy())
-        return cfg
+        return self._default_args.copy()
     
     def register_to_config(self, **kwargs):
-        if hasattr(self, "_default_args"):
-            self._default_args.update(kwargs.copy())
-        else:
-            self._default_args = OmegaConf.create(kwargs.copy())
+        self._default_args.update(kwargs)
 
     @classmethod
     def from_config(cls, config: dict):
