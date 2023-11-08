@@ -1,9 +1,9 @@
 from __future__ import annotations
-from typing import Dict, Iterable, List, Optional, Tuple, TYPE_CHECKING
+from typing import Dict, Iterable, List, Optional, Tuple, TYPE_CHECKING, Union
 import os
 import math
 import itertools
-from sympy import Union
+from omegaconf import OmegaConf
 
 import torch
 import accelerate
@@ -109,9 +109,11 @@ class Trainer:
         if self.accelerator.is_main_process:
             exp_config = dict()
             exp_config["training_args"] = self.training_args.config
-            exp_config["training_module"] = training_module.config
+            exp_config["training_module"] = OmegaConf.to_container(
+                training_module.config
+            )
             if data_module is not None:
-                exp_config["datamodule"] = data_module.config
+                exp_config["datamodule"] = OmegaConf.to_container(data_module.config)
 
             self.accelerator.init_trackers(
                 project_name=project_name,
