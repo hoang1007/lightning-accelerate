@@ -58,9 +58,12 @@ def prune_checkpoints(folder: str, limit: int):
         for path in content
         if _re_checkpoint.search(path) is not None and os.path.isdir(os.path.join(folder, path))
     ]
-    if len(checkpoints) <= limit:
-        return
-    checkpoints.sort(key=lambda x: int(_re_checkpoint.search(x).groups()[0]))
-    for checkpoint in checkpoints[:-limit]:
-        checkpoint_path = os.path.join(folder, checkpoint)
-        shutil.rmtree(checkpoint_path)
+    if limit == 0:
+        for checkpoint in checkpoints:
+            checkpoint_path = os.path.join(folder, checkpoint)
+            shutil.rmtree(checkpoint_path)
+    elif len(checkpoints) > limit:
+        checkpoints.sort(key=lambda x: int(_re_checkpoint.search(x).groups()[0]))
+        for checkpoint in checkpoints[:-limit]:
+            checkpoint_path = os.path.join(folder, checkpoint)
+            shutil.rmtree(checkpoint_path)

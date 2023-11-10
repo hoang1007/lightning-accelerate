@@ -1,8 +1,7 @@
 from __future__ import annotations
 from warnings import warn
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict, Sequence, Union
 from typing import List, Iterable
-from tqdm import tqdm
 
 import torch
 from lightning_accelerate.hooks import BaseHook
@@ -22,7 +21,7 @@ class TrainingModule(torch.nn.Module, BaseHook, ConfigMixin):
             batch: The current batch.
             batch_idx: The index of the current batch.
             optimizer_idx: The index of the current optimizer.
-        
+
         Returns:
             Tensor containing the loss for the current step.
         """
@@ -36,12 +35,25 @@ class TrainingModule(torch.nn.Module, BaseHook, ConfigMixin):
         """
         raise NotImplementedError
 
-    def get_optim_params(self) -> List[Iterable[torch.nn.Parameter]]:
+    def get_optim_params(
+        self,
+    ) -> Union[
+        Iterable[torch.nn.Parameter],
+        Sequence[Iterable[torch.nn.Parameter]],
+        Iterable[Dict],
+        Sequence[Iterable[Dict]],
+    ]:
         """
         The parameters to optimize.
 
         Returns:
-            List of parameter groups. Each parameter group in the return value will be passed to an optimizer.
+            Parameter groups to be optimize.
+            They could be an `Iterable[torch.nn.Parameter]` for single optimizer,
+            `Sequence[Iterable[torch.nn.Parameter]]` for multiple optimizers,
+            `Iterable[Dict]` defining param groups for advanced options. Dict should contain a `params` key, containing an iterable of parameters
+            , `lr_scale` key containing a scale factor to apply to the learning rate
+            and other optional optimizer arguments (See `torch.optim.Optimizer` for details)
+            or `Sequence[Iterable[Dict]]` for multiple optimizers.
         """
         raise NotImplementedError
 
@@ -70,7 +82,7 @@ class TrainingModule(torch.nn.Module, BaseHook, ConfigMixin):
     def device(self):
         device = next(self.parameters()).device
         return device
-    
+
     @property
     def logged_values(self):
         """
@@ -124,7 +136,9 @@ class TrainingModule(torch.nn.Module, BaseHook, ConfigMixin):
             elif hasattr(tracker, "log_images"):
                 tracker.log_images(images, step=self.global_step)
             else:
-                warn(f"Tracker {tracker.__class__.__name__} does not support image logging. Skipping...")
+                warn(
+                    f"Tracker {tracker.__class__.__name__} does not support image logging. Skipping..."
+                )
 
     def register_trainer(self, trainer: Trainer):
         self._trainer = trainer

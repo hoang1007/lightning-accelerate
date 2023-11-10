@@ -1,4 +1,4 @@
-from typing import Literal, Optional
+from typing import Literal, Optional, Union, List
 from dataclasses import dataclass, field, asdict
 import os
 import shutil
@@ -132,18 +132,9 @@ class TrainingArguments:
     lora_alpha: int = field(
         default=32, metadata={"help": "LoRA alpha, only used if use_lora is True."}
     )
-    lora_rank_dropout: float = field(
+    lora_dropout: float = field(
         default=0.0,
-        metadata={"help": "LoRA rank dropout, only used if use_lora is True."},
-    )
-    lora_module_dropout: float = field(
-        default=0.0, metadata={"help": "LoRA dropout for disabling module at all."}
-    )
-    use_effective_conv2d: bool = field(
-        default=False,
-        metadata={
-            "help": "Use parameter effective decomposition for Conv2d 3x3 with ksize > 1."
-        },
+        metadata={"help": "LoRA dropout, only used if use_lora is True."},
     )
 
     save_steps: int = field(
@@ -211,6 +202,16 @@ class TrainingArguments:
 
     def get_fsdp_plugin(self):
         return None
+
+    def get_lora_config(self, target_modules: Optional[Union[List[str], str]] = None):
+        from peft import LoraConfig
+
+        return LoraConfig(
+            r=self.lora_rank,
+            lora_alpha=self.lora_alpha,
+            lora_dropout=self.lora_dropout,
+            target_modules=target_modules,
+        )
 
     @property
     def config(self):

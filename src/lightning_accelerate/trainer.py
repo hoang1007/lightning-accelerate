@@ -1,7 +1,9 @@
 from __future__ import annotations
-from typing import Iterable, Optional, Tuple, TYPE_CHECKING
+from typing import Dict, Iterable, List, Optional, Tuple, TYPE_CHECKING, Union
 import os
 import math
+import itertools
+from omegaconf import OmegaConf
 
 import torch
 import accelerate
@@ -75,8 +77,7 @@ class Trainer:
         )
 
         self.optimizers = [
-            self._create_optimizer(params)
-            for params in unwrap_model(self.training_module).get_optim_params()
+            self._create_optimizer(params) for params in self._get_model_optim_params()
         ]
 
         num_training_steps = len(self.train_dataloader) * self.training_args.num_epochs
@@ -108,9 +109,11 @@ class Trainer:
         if self.accelerator.is_main_process:
             exp_config = dict()
             exp_config["training_args"] = self.training_args.config
-            exp_config["training_module"] = training_module.config
+            exp_config["training_module"] = OmegaConf.to_container(
+                training_module.config
+            )
             if data_module is not None:
-                exp_config["datamodule"] = data_module.config
+                exp_config["datamodule"] = OmegaConf.to_container(data_module.config)
 
             self.accelerator.init_trackers(
                 project_name=project_name,
@@ -207,11 +210,7 @@ class Trainer:
                             self.accelerator.backward(loss)
                             if self.training_args.max_grad_norm is not None:
                                 if self.accelerator.sync_gradients:
-                                    self._clip_grad_norm_(
-                                        unwrap_model(
-                                            self.training_module
-                                        ).get_optim_params()[opt_idx],
-                                    )
+                                    self._clip_grad_norm_(opt_idx)
                             opt.step()
                         for scheduler in self.schedulers:
                             scheduler.step()
@@ -268,7 +267,7 @@ class Trainer:
             total=len(self.val_dataloader),
             disable=not self.accelerator.is_local_main_process,
             desc="Evaluating...",
-            leave=False
+            leave=False,
         )
 
         with torch.inference_mode(), progress_bar:
@@ -290,9 +289,9 @@ class Trainer:
 
     def evaluate(self):
         if self.global_step == 0:
-            assert self.training_args.resume_from_checkpoint is not None, (
-                "You must specify a checkpoint to evaluate with --resume_from_checkpoint"
-            )
+            assert (
+                self.training_args.resume_from_checkpoint is not None
+            ), "You must specify a checkpoint to evaluate with --resume_from_checkpoint"
             path = self.load_state(self.training_args.resume_from_checkpoint)
             print("Evaluate from checkpoint", path)
 
@@ -300,14 +299,14 @@ class Trainer:
         metrics = unwrap_model(self.training_module).logged_values
 
         for k, v in metrics.items():
-            print(k, v, sep=':\t')
+            print(k, v, sep=":\t")
         return metrics
 
     def get_tracker(self, unwrap: bool = False):
         if self.training_args.tracker is not None:
             return self.accelerator.get_tracker(self.training_args.tracker, unwrap)
 
-    def _create_optimizer(self, parameters: Iterable[Parameter]):
+    def _create_optimizer(self, parameters: Union[Iterable[Parameter], Iterable[Dict]]):
         if (
             self.accelerator.state.deepspeed_plugin is not None
             and "optimizer" in self.accelerator.state.deepspeed_plugin.deepspeed_config
@@ -377,10 +376,14 @@ class Trainer:
             shuffle=False,
         )
 
-    def _clip_grad_norm_(self, parameters: Iterable[torch.nn.Parameter]):
+    def _clip_grad_norm_(self, optimizer_idx: int):
         if self.accelerator.sync_gradients:
+            param_groups = self._get_model_optim_params()[optimizer_idx]
+            params_to_clip = itertools.chain.from_iterable(
+                [group["params"] for group in param_groups]
+            )
             self.accelerator.clip_grad_norm_(
-                parameters, self.training_args.max_grad_norm
+                params_to_clip, self.training_args.max_grad_norm
             )
 
     def load_state(self, path: str = "latest"):
@@ -411,18 +414,11 @@ class Trainer:
 
         if self.training_args.use_lora:
             from peft import get_peft_model
-            from peft import LoHaConfig
 
             training_module = get_peft_model(
                 model=training_module,
-                peft_config=LoHaConfig(
-                    r=self.training_args.lora_rank,
-                    alpha=self.training_args.lora_alpha,
-                    rank_dropout=self.training_args.lora_rank_dropout,
-                    module_dropout=self.training_args.lora_module_dropout,
-                    use_effective_conv2d=self.training_args.use_effective_conv2d,
-                    target_modules=training_module.LORA_TARGET_MODULES,
-                    init_weights=True,
+                peft_config=self.training_args.get_lora_config(
+                    training_module.LORA_TARGET_MODULES
                 ),
             )
         # Wrap TrainingModule with DDPWrapper
@@ -465,3 +461,37 @@ class Trainer:
             eval_dataloader = self._get_eval_dataloader(eval_dataset)
 
         return train_dataloader, eval_dataloader
+
+    def _get_model_optim_params(self) -> List[Iterable[Dict]]:
+        model = unwrap_model(self.training_module)
+        params = model.get_optim_params()
+
+        is_sequence = lambda x: isinstance(x, (list, tuple))
+        is_iterable = lambda x: hasattr(x, "__iter__")
+        is_iterable_dict = lambda x: is_iterable(x) and isinstance(next(iter(x)), dict)
+
+        # Iterable[Parameter]
+        if not is_sequence(params) and is_iterable(params):
+            params = [params]
+        # Iterable[Dict]
+        if is_iterable_dict(params):
+            params = [params]
+
+        # case 1: Sequence[Iterable[Parameter]]
+        if is_iterable_dict(params[0]):
+            param_groups_list = params
+            for param_groups in param_groups_list:
+                for group in param_groups:
+                    # Check keys
+                    assert "params" in group, "The key `params` is not found!"
+                    lr_scale = group.pop("lr_scale", 1.0)
+                    group["lr"] = lr_scale * self.training_args.learning_rate
+        else:
+            # case 2: Sequence[Iterable[Parameter]]
+            param_groups_list = []
+            for param_group in params:
+                param_groups_list.append(
+                    [dict(params=param_group, lr=self.training_args.learning_rate)]
+                )
+
+        return param_groups_list

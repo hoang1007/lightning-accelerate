@@ -45,7 +45,7 @@ class MnistTrainingModule(TrainingModule):
         return loss
 
     def get_optim_params(self):
-        return [self.model.parameters()]
+        return self.model.parameters()
 
 # -------------------
 # Step 2: Define a DataModule. This module contains the data preparation logics such as downloading data, preprocessing, etc... and then is used to feed to the `TrainingModule` for training and evaluation.
